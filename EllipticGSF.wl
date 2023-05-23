@@ -963,7 +963,8 @@ couplingMatrixSec[m_, a_, r0_, rStarList_, rSubrPlusList_, thetaList_
   Module[{n, M, v, \[CapitalOmega], rPlus, iMax, jMax, i, j, mat, row, col, rSubrPlus,
      \[Theta], \[CapitalDelta]rStar, \[CapitalDelta]\[Theta], \[Omega], rSlice, \[Theta]Slice, Aar, Bar, Car, Cdiags, Cmat, leftAdiags,
      leftAmat, rightAdiags, rightAmat, leftBdiags, leftBmat, rightBdiags,
-     rightBmat, \[Theta]2coeff, \[Theta]2mat, rStar2coeff, rStar2mat, \[Theta]BCmat, rBCmat},
+     rightBmat, \[Theta]2coeff, \[Theta]2mat, rStar2coeff, rStar2mat, \[Theta]BCmat, rBCmat, drcls,
+     nemns},
     Parallelize[
       n = 10;
       M = 1;
@@ -1043,7 +1044,36 @@ couplingMatrixSec[m_, a_, r0_, rStarList_, rSubrPlusList_, thetaList_
         ]]], {iMax * jMax * n - n}, 0], n] + DiagonalMatrix[SparseArray[{k_} 
         :> d2SecM1[\[CapitalDelta]rStar] rStar2coeff[[posToJ[colToPos[k + n, n], iMax], posToI[
         colToPos[k + n, n], iMax]]], {iMax * jMax * n - n}, 0], -n];
-      \[Theta]BCmat =
+      drcls =
+        If[m == 0,
+          {0, 0, 1, 1, 0, 1, 1, 1, 1, 1}
+          ,
+          If[m == 1,
+            {1, 1, 0, 0, 1, 0, 0, 1, 1, 1}
+            ,
+            If[m == 2,
+              {1, 1, 1, 1, 1, 1, 1, 0, 0, 0}
+              ,
+              {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+            ]
+          ]
+        ];
+      nemns = 2 + BitNot[drcls];
+      \[Theta]BCmat = SparseArray[Join[Flatten[Table[{j + (i - 1) * n, j + (
+        i - 1) * n} -> -3 / (2 \[CapitalDelta]\[Theta]) nemns[[j]] + drcls[[j]], {j, 1, n}, {i, 1,
+         iMax}]], Flatten[Table[{j + (i - 1) * n, j + (i - 1) * n + iMax n} ->
+         4 / (2 \[CapitalDelta]\[Theta]) nemns[[j]], {j, 1, n}, {i, 1, iMax}]], Flatten[Table[{j +
+         (i - 1) * n, j + (i - 1) * n + 2 iMax n} -> 4 / (2 \[CapitalDelta]\[Theta]) nemns[[j]], {
+        j, 1, n}, {i, 1, iMax}]], Flatten[Table[{iMax * jMax * n - iMax * n +
+         j + (i - 1) * n, iMax * jMax * n - iMax * n + j + (i - 1) * n} -> 3 
+        / (2 \[CapitalDelta]\[Theta]) nemns[[j]] + drcls[[j]], {j, 1, n}, {i, 1, iMax}]], Flatten[
+        Table[{iMax * jMax * n - iMax * n + j + (i - 1) * n, iMax * jMax * n 
+        - 2 iMax * n + j + (i - 1) * n} -> -4 / (2 \[CapitalDelta]\[Theta]) nemns[[j]], {j, 1, 
+        n}, {i, 1, iMax}]], Flatten[Table[{iMax * jMax * n - iMax * n + j + (
+        i - 1) * n, iMax * jMax * n - 3 iMax * n + j + (i - 1) * n} -> 1 / (2
+         \[CapitalDelta]\[Theta]) nemns[[j]], {j, 1, n}, {i, 1, iMax}]]], {iMax * jMax * n, iMax *
+         jMax * n}, 0];
+      (*\[Theta]BCmat =
         If[m == 0,
           SparseArray[{Band[{1, 1}, {iMax * n, iMax * n}] -> -3 / (2 
             \[CapitalDelta]\[Theta]), Band[{1, 1 + iMax n}, {iMax * n, iMax * n + iMax n}] -> 4 / (2 \[CapitalDelta]\[Theta]
@@ -1060,7 +1090,7 @@ couplingMatrixSec[m_, a_, r0_, rStarList_, rSubrPlusList_, thetaList_
             {iMax * jMax * n + 1 - iMax * n, iMax * jMax * n + 1 - iMax * n}, {iMax
              * jMax * n, iMax * jMax * n}] -> 1}, {iMax * jMax * n, iMax * jMax *
              n}, 0]
-        ];
+        ];*)
       rBCmat =
         SparseArray[Flatten[Table[{Band[{lPosToCol[1, ijToPos[1, j, iMax
           ], n], lPosToCol[1, ijToPos[1, j, iMax], n]}, {lPosToCol[n, ijToPos[1,
@@ -1108,6 +1138,30 @@ testMatrix[m_, a_, r0_, \[CapitalDelta]rStar_, \[CapitalDelta]\[Theta]_, rStarMa
   mat = couplingMatrixSec[m, N[a], N[r0], rStarList, rSubrPlusList, thetaList]; 
   Return[mat];
 ]
+
+
+sourceVectorPoint[m_, a_, r0_, rStarList_, rSubrPlusList_, thetaList_, iSourceMin_,
+   iSourceMax_, jSourceMin_, jSourceMax_] :=
+  Module[{n, iMax, jMax, vec, l, i, j},
+    n = 10;
+    iMax = Length[rStarList];
+    jMax = Length[thetaList];
+    vec = SparseArray[{}, {n iMax jMax}, 0];
+    l = 1;
+    i = Floor[(iSourceMin + iSourceMax)/2];
+    j = Floor[(jSourceMin + jSourceMax)/2];
+    vec[[lPosToCol[l, ijToPos[i, j, iMax], n]]] = 1;
+    i = Ceiling[(iSourceMin + iSourceMax)/2];
+    j = Floor[(jSourceMin + jSourceMax)/2];
+    vec[[lPosToCol[l, ijToPos[i, j, iMax], n]]] = 1;
+    i = Floor[(iSourceMin + iSourceMax)/2];
+    j = Ceiling[(jSourceMin + jSourceMax)/2];
+    vec[[lPosToCol[l, ijToPos[i, j, iMax], n]]] = 1;
+    i = Ceiling[(iSourceMin + iSourceMax)/2];
+    j = Ceiling[(jSourceMin + jSourceMax)/2];
+    vec[[lPosToCol[l, ijToPos[i, j, iMax], n]]] = 1;
+    Return[vec];
+  ]
 
 
 sourceVector[m_, a_, r0_, rStarList_, rSubrPlusList_, thetaList_, iSourceMin_,
@@ -1256,12 +1310,12 @@ testSourceVector[m_, a_, r0_, wtDiam_, thetaSourceSize_, \[CapitalDelta]rStar_, 
        iSourceMin, iSourceMax, jSourceMin, jSourceMax];
     iMax = Length[rStarList];
     jMax = Length[thetaList];
-    source2D = Table[vec[[lPosToCol[3, ijToPos[i, j, iMax], n]]], {i,
+    source2D = Table[vec[[lPosToCol[l, ijToPos[i, j, iMax], n]]], {l, 1, n}, {i,
        iSourceMin + 1, iSourceMax - 1}, {j, jSourceMin + 1, jSourceMax - 1}
       ];
     rPlus = 1 + Sqrt[1 - a^2];
     Phi2D = Table[PsiPm[m, a, rSubrPlusList[[i]] + rPlus, thetaList[[
-      j]]], {i, iSourceMin + 1, iSourceMax - 1}, {j, jSourceMin + 1, jSourceMax
+      j]]][[l]], {l, 1, n}, {i, iSourceMin + 1, iSourceMax - 1}, {j, jSourceMin + 1, jSourceMax
        - 1}];
     Return[{source2D, Phi2D, rStarList, rSubrPlusList, thetaList, iSourceMin,
        iSourceMax, jSourceMin, jSourceMax}];
@@ -1336,7 +1390,7 @@ mRunField[m_, a_, r0_, wtDiam_, thetaSourceSize_, \[CapitalDelta]rStar_, \[Capit
     jMax = Length[thetaList];
     mat = couplingMatrixSec[m, a, r0, rStarList, rSubrPlusList, thetaList
       ];
-    vec = sourceVector[m, a, r0, rStarList, rSubrPlusList, thetaList,
+    vec = sourceVectorPoint[m, a, r0, rStarList, rSubrPlusList, thetaList,
        iSourceMin, iSourceMax, jSourceMin, jSourceMax];
     sol = LinearSolve[mat, vec, Method -> "Pardiso"];
     sol2D = Table[sol[[lPosToCol[l, ijToPos[i, j, iMax], n]]], {l, 1,
